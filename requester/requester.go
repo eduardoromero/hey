@@ -17,13 +17,19 @@ package requester
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -80,6 +86,11 @@ type Work struct {
 
 	// DisableRedirects is an option to prevent the following of HTTP redirects
 	DisableRedirects bool
+
+	// AWS
+	Profile string
+	Region  string
+	Service string
 
 	// Output represents the output type. If "csv" is provided, the
 	// output will be dumped as a csv stream.
@@ -181,6 +192,17 @@ func (b *Work) makeRequest(c *http.Client) {
 			resStart = now()
 		},
 	}
+
+	// aws request support
+	if b.Service != "" && b.Region != "" {
+		cfg, _ := config.LoadDefaultConfig(context.TODO(), config.WithRegion(b.Region))
+		credentials, err := cfg.Credentials.Retrieve(context.TODO())
+		if err == nil {
+			signer := v4.NewSigner()
+			signer.SignHTTP(req.Context(), credentials, req, getHash(b.RequestBody), b.Service, b.Region, time.Now())
+		}
+	}
+
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 	resp, err := c.Do(req)
 	if err == nil {
@@ -284,4 +306,12 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func getHash(body []byte) string {
+	reader := strings.NewReader(string(body))
+	h := sha256.New()
+	_, _ = io.Copy(h, reader)
+
+	return hex.EncodeToString(h.Sum(nil))
 }

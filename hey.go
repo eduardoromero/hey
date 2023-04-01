@@ -48,6 +48,10 @@ var (
 	authHeader  = flag.String("a", "", "")
 	hostHeader  = flag.String("host", "", "")
 	userAgent   = flag.String("U", "", "")
+	aws         = flag.Bool("aws", false, "enables aws signing. See profile, service and region")
+	profile     = flag.String("profile", "", "aws profile to use")
+	service     = flag.String("service", "execute-api", "service name, like execute-api, lambda or appsync")
+	region      = flag.String("region", "us-west-2", "aws region where the service is running")
 
 	output = flag.String("o", "", "")
 
@@ -93,6 +97,7 @@ Options:
   -x  HTTP Proxy address as host:port.
   -h2 Enable HTTP/2.
 
+  -aws 	Enable AWS sigv4 request signing. Optionally, pass the profile to use for signing. 
   -host	HTTP Host header.
 
   -disable-compression  Disable compression.
@@ -158,6 +163,15 @@ func main() {
 
 	if *accept != "" {
 		header.Set("Accept", *accept)
+	}
+
+	// enable aws signing only if set
+	if !*aws {
+		*service = ""
+	}
+
+	if *service != "" && *region != "" {
+		fmt.Fprint(os.Stdout, fmt.Sprintf("AWS sigv4 is using service %s and region %s\n", *service, *region))
 	}
 
 	// set basic auth if set
@@ -234,6 +248,9 @@ func main() {
 		H2:                 *h2,
 		ProxyAddr:          proxyURL,
 		Output:             *output,
+		Profile:            *profile,
+		Region:             *region,
+		Service:            *service,
 	}
 	w.Init()
 
